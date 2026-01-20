@@ -25,11 +25,18 @@ export default function EditQRCodePage({
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const router = useRouter()
+    const supabase = createClient()
+
     useEffect(() => {
-        const fetchCode = () => {
+        const fetchCode = async () => {
             try {
-                const data = LocalDB.getCode(params.id)
-                if (!data) throw new Error('Code not found')
+                const { data, error } = await supabase
+                    .from('qr_codes')
+                    .select('*')
+                    .eq('id', params.id)
+                    .single()
+
+                if (error || !data) throw new Error('Code not found')
 
                 setCode(data)
                 setName(data.name)
@@ -37,7 +44,8 @@ export default function EditQRCodePage({
                 setDescription(data.description || '')
                 setActive(data.is_active)
             } catch (error: any) {
-                toast.error('Failed to load QR code')
+                console.error('Fetch error:', error)
+                toast.error('Failed to load QR code from database')
                 router.push('/dashboard/codes')
             } finally {
                 setLoading(false)
@@ -45,7 +53,7 @@ export default function EditQRCodePage({
         }
 
         fetchCode()
-    }, [params.id, router])
+    }, [params.id, router, supabase])
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -59,14 +67,20 @@ export default function EditQRCodePage({
         }
 
         try {
-            LocalDB.updateCode(params.id, {
-                name,
-                current_url: sanitizedUrl,
-                description,
-                is_active: active
-            })
+            const { error } = await supabase
+                .from('qr_codes')
+                .update({
+                    name,
+                    current_url: sanitizedUrl,
+                    description,
+                    is_active: active,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', params.id)
 
-            toast.success('QR Code updated successfully! (Local)')
+            if (error) throw error
+
+            toast.success('QR Code updated successfully! (Database)')
             router.push('/dashboard/codes')
         } catch (error: any) {
             toast.error(error.message || 'Failed to update QR code')
@@ -79,8 +93,9 @@ export default function EditQRCodePage({
         if (!confirm('Are you sure you want to delete this QR code?')) return
 
         try {
-            LocalDB.deleteCode(params.id)
-            toast.success('Deleted successfully (Local)')
+            const { error } = await supabase.from('qr_codes').delete().eq('id', params.id)
+            if (error) throw error
+            toast.success('Deleted successfully (Database)')
             router.push('/dashboard/codes')
         } catch (error: any) {
             toast.error('Failed to delete')

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LocalDB } from '@/lib/db/local-db'
+import { createClient } from '@/lib/supabase/client'
 import { generateShortId } from '@/lib/utils/generate-short-id'
 import { sanitizeUrl, validateUrl } from '@/lib/utils/validate-url'
 import { ArrowLeft, Save, Sparkles, Globe, Tag, Info, Loader2 } from 'lucide-react'
@@ -15,6 +15,7 @@ export default function NewQRCodePage() {
     const [description, setDescription] = useState('')
     const [loading, setLoading] = useState(false)
     const router = useRouter()
+    const supabase = createClient()
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -26,20 +27,25 @@ export default function NewQRCodePage() {
             setLoading(false)
             return
         }
-
         try {
-            // Use LocalDB for instant, error-free creation
             const shortId = generateShortId()
+            const user = { id: 'guest-user-123' }
 
-            LocalDB.createCode({
-                name,
-                current_url: sanitizedUrl,
-                description,
-                short_id: shortId,
-                is_active: true
-            })
+            const { error } = await supabase
+                .from('qr_codes')
+                .insert({
+                    user_id: user.id,
+                    name,
+                    current_url: sanitizedUrl,
+                    description,
+                    short_id: shortId,
+                    scan_count: 0,
+                    is_active: true,
+                })
 
-            toast.success('QR Code created successfully! (Local)')
+            if (error) throw error
+
+            toast.success('QR Code created successfully! (Database)')
             router.push('/dashboard/codes')
         } catch (error: any) {
             console.error('Error creating QR code:', error)

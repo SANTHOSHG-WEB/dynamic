@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Search, Filter, MoreVertical, QrCode, ArrowUpRight, Copy, Download, Trash2, Edit2, BarChart3, Globe } from 'lucide-react'
 import Link from 'next/link'
-import { LocalDB } from '@/lib/db/local-db'
+import { createClient } from '@/lib/supabase/client'
 import { QRCode } from '@/lib/types'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -12,17 +12,28 @@ export default function MyCodesPage() {
     const [codes, setCodes] = useState<QRCode[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
+    const supabase = createClient()
 
     useEffect(() => {
         fetchCodes()
-    }, [])
+    }, [supabase])
 
     const fetchCodes = async () => {
         try {
-            const data = LocalDB.getCodes()
-            setCodes(data)
+            // Use guest ID for free mode
+            const userId = 'guest-user-123'
+
+            const { data, error } = await supabase
+                .from('qr_codes')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setCodes(data || [])
         } catch (error: any) {
-            toast.error('Failed to load QR codes')
+            console.error('Fetch error:', error)
+            toast.error('Failed to load QR codes from database')
         } finally {
             setLoading(false)
         }
@@ -32,21 +43,27 @@ export default function MyCodesPage() {
         if (!confirm('Are you sure you want to delete this QR code?')) return
 
         try {
-            LocalDB.deleteCode(id)
-            toast.success('Deleted successfully (Local)')
+            const { error } = await supabase.from('qr_codes').delete().eq('id', id)
+            if (error) throw error
+            toast.success('Deleted successfully (Database)')
             setCodes(codes.filter(c => c.id !== id))
         } catch (error: any) {
-            toast.error('Failed to delete')
+            toast.error('Failed to delete from database')
         }
     }
 
     const toggleStatus = async (code: QRCode) => {
         try {
-            LocalDB.updateCode(code.id, { is_active: !code.is_active })
-            toast.success(`QR code ${!code.is_active ? 'activated' : 'deactivated'} (Local)`)
+            const { error } = await supabase
+                .from('qr_codes')
+                .update({ is_active: !code.is_active })
+                .eq('id', code.id)
+
+            if (error) throw error
+            toast.success(`QR code ${!code.is_active ? 'activated' : 'deactivated'} (Database)`)
             setCodes(codes.map(c => c.id === code.id ? { ...c, is_active: !c.is_active } : c))
         } catch (error: any) {
-            toast.error('Failed to update status')
+            toast.error('Failed to update status in database')
         }
     }
 
