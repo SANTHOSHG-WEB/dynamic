@@ -23,6 +23,23 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${outfit.variable} font-sans antialiased selection:bg-primary/30 text-foreground bg-background`}
       >
+        {/* GitHub Pages SPA Routing Fix */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(l) {
+                if (l.search[1] === '/' ) {
+                  var decoded = l.search.slice(1).split('&').map(function(s) { 
+                    return s.replace(/~and~/g, '&')
+                  }).join('?');
+                  window.history.replaceState(null, null,
+                      l.pathname.slice(0, -1) + decoded + l.hash
+                  );
+                }
+              }(window.location))
+            `,
+          }}
+        />
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <AuthProvider>
             {children}

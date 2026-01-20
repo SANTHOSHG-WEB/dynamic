@@ -1,24 +1,75 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import { QrCode, AlertCircle, ArrowRight } from 'lucide-react'
-import Link from 'next/link'
+'use client'
 
-export default async function QRRedirectPage({
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { QrCode, AlertCircle, ArrowRight, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { QRCode } from '@/lib/types'
+
+export default function QRRedirectPage({
     params,
 }: {
     params: { shortId: string }
 }) {
-    const { shortId } = params
-    const supabase = await createClient()
+    const [loading, setLoading] = useState(true)
+    const [code, setCode] = useState<QRCode | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const supabase = createClient()
 
-    // 1. Fetch the QR code record
-    const { data: code, error } = await supabase
-        .from('qr_codes')
-        .select('*')
-        .eq('short_id', shortId)
-        .single()
+    useEffect(() => {
+        const fetchAndRedirect = async () => {
+            try {
+                // 1. Fetch the QR code record
+                const { data, error } = await supabase
+                    .from('qr_codes')
+                    .select('*')
+                    .eq('short_id', params.shortId)
+                    .single()
 
-    if (error || !code) {
+                if (error || !data) {
+                    setError('QR Code Not Found')
+                    setLoading(false)
+                    return
+                }
+
+                if (!data.is_active) {
+                    setError('QR Code Inactive')
+                    setCode(data)
+                    setLoading(false)
+                    return
+                }
+
+                // 2. Increment scan count
+                await supabase
+                    .from('qr_codes')
+                    .update({
+                        scan_count: (data.scan_count || 0) + 1,
+                        last_scanned_at: new Date().toISOString()
+                    })
+                    .eq('id', data.id)
+
+                // 3. Redirect to current URL
+                window.location.href = data.current_url
+            } catch (err) {
+                console.error('Redirect error:', err)
+                setError('An error occurred during redirection')
+                setLoading(false)
+            }
+        }
+
+        fetchAndRedirect()
+    }, [params.shortId, supabase])
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                <p className="text-muted-foreground animate-pulse">Redirecting you to your destination...</p>
+            </div>
+        )
+    }
+
+    if (error === 'QR Code Not Found' || !code) {
         return (
             <div className="min-h-screen flex items-center justify-center p-6 text-center">
                 <div className="max-w-md w-full glass p-10 rounded-3xl border border-white/10 space-y-6">
@@ -35,8 +86,7 @@ export default async function QRRedirectPage({
         )
     }
 
-    // 2. Check if active
-    if (!code.is_active) {
+    if (error === 'QR Code Inactive' || !code.is_active) {
         return (
             <div className="min-h-screen flex items-center justify-center p-6 text-center">
                 <div className="max-w-md w-full glass p-10 rounded-3xl border border-white/10 space-y-6">
@@ -51,16 +101,5 @@ export default async function QRRedirectPage({
         )
     }
 
-    // 3. Increment scan count (asynchronously)
-    // We can use a RPC or just an update since we are in a server component
-    await supabase
-        .from('qr_codes')
-        .update({
-            scan_count: (code.scan_count || 0) + 1,
-            last_scanned_at: new Date().toISOString()
-        })
-        .eq('id', code.id)
-
-    // 4. Redirect to current URL
-    redirect(code.current_url)
+    return null
 }

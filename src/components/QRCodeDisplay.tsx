@@ -15,7 +15,7 @@ export default function QRCodeDisplay({ url, name, shortId }: QRCodeDisplayProps
     const [copied, setCopied] = useState(false)
     const canvasRef = useRef<HTMLDivElement>(null)
 
-    const shortLink = `${window.location.origin}/qr/${shortId}`
+    const shortLink = `${window.location.origin}/dynamic/qr/${shortId}`
 
     const copyToClipboard = async () => {
         try {
