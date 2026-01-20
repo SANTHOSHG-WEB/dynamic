@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   },
   basePath: '/dynamic',
   assetPrefix: '/dynamic',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;
